@@ -5,6 +5,7 @@
 #include <IRremoteESP8266.h>
 #include <IRsend.h>
 #include <ir_Fujitsu.h>
+#include <iostream>
 
 #include "config.h"
 
@@ -13,8 +14,6 @@
 #define PIN_DHT22 D2
 #define PIN_STATUS_LED D4
 #define DHT_TYPE DHT22
-
-using namespace std;
 
 // setup clients
 WiFiClient wifi;
@@ -53,7 +52,7 @@ void connectWifi() {
 
 // get mode from local fujitsu state and translate to home home assistant strings
 void updateModeState() {
-    string mode;
+    std::string mode;
     if (isPowerOn) {
         switch (ac.getMode()) {
             case kFujitsuAcModeCool:
@@ -88,7 +87,7 @@ void updateSetpointState() {
 
 // update the state topic for fan
 void updateFanState() {
-    string mode;
+    std::string mode;
     switch (ac.getFanSpeed()) {
         case kFujitsuAcFanHigh:
             mode = "high";
@@ -111,7 +110,7 @@ void updateFanState() {
 
 // update the state topic for swing
 void updateSwingState() {
-    string mode;
+    std::string mode;
     switch (ac.getSwing()) {
         case kFujitsuAcSwingOff:
             mode = "off";
@@ -255,7 +254,10 @@ void connectMQTT() {
     mqtt.subscribe(MQTT_TOPIC_BASE "swing/set");
     mqtt.subscribe(MQTT_TOPIC_BASE "powerful/set");
     delay(1000);
-    digitalWrite(PIN_STATUS_LED, HIGH);
+    if(isInitComplete){
+        mqtt.publish(MQTT_TOPIC_BASE "availability", "online", true);
+        digitalWrite(PIN_STATUS_LED, HIGH);
+    }
 }
 
 // return true if a and b are nearly equal with precision of epsilon
@@ -318,6 +320,7 @@ void loop() {
         isInitComplete = true;
         updateStates();
         mqtt.publish(MQTT_TOPIC_BASE "availability", "online", true);
+        digitalWrite(PIN_STATUS_LED, HIGH);
         Serial.println("Init complete. Sending updates.");
     }
 
