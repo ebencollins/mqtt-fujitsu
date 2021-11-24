@@ -169,6 +169,10 @@ void onMessage(const char *topic, byte *payload, unsigned int length) {
             ac.setMode(kFujitsuAcModeCool);
             ac.setPower(true);
             isPowerOn = true;
+        } else if (strcmp(message, "heat") == 0) {
+            ac.setMode(kFujitsuAcModeHeat);
+            ac.setPower(true);
+            isPowerOn = true;
         } else if (strcmp(message, "auto") == 0) {
             ac.setMode(kFujitsuAcModeAuto);
             ac.setPower(true);
