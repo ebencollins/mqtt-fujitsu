@@ -15,15 +15,13 @@
 #define PIN_STATUS_LED D4
 #define DHT_TYPE DHT22
 
-// setup clients
-WiFiClient wifi;
+// seems like secure client must be used to work with mosquitto 2.0 - also need to set wifi.setInsecure()
+WiFiClientSecure wifi;
 PubSubClient mqtt(wifi);
 IRFujitsuAC ac(PIN_IR_LED);
 DHT dht(PIN_DHT22, DHT_TYPE);
 
-// dht temp/humidity
 float temperature, humidity;
-// loop counter
 int cnt;
 
 bool isInitComplete = false;
@@ -33,8 +31,8 @@ bool isInitComplete = false;
 bool isPowerOn = false;
 bool isPowerful = false; // no way to get powerful state
 
-// loop until wifi is connected
 void connectWifi() {
+    wifi.setInsecure();
     WiFi.mode(WIFI_OFF);
     WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -140,7 +138,6 @@ void updateStates() {
     updatePowerfulState();
 }
 
-// flask a pin
 void flashPin(unsigned char pin) {
     digitalWrite(pin, LOW);
     delay(500);
@@ -194,7 +191,7 @@ void onMessage(const char *topic, byte *payload, unsigned int length) {
         float sp = atof(message);
         // atof returns 0 if can't parse
         // outside of these bounds doesn't work properly
-        if (sp > 18 && sp < 30) {
+        if (sp >= 16 && sp < 30) {
             ac.setTemp(sp);
         }
         ac.send();
@@ -246,7 +243,8 @@ void connectMQTT() {
     Serial.println("Connecting to MQTT broker...");
     while (!mqtt.connected()) {
         if (!mqtt.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASSWORD, MQTT_TOPIC_BASE "availability", 1, true, "offline")) {
-            Serial.print(".");
+            Serial.print("Failed with state: ");
+            Serial.println(mqtt.state());
             delay(1000);
         }
     }
@@ -258,7 +256,7 @@ void connectMQTT() {
     mqtt.subscribe(MQTT_TOPIC_BASE "swing/set");
     mqtt.subscribe(MQTT_TOPIC_BASE "powerful/set");
     delay(1000);
-    if(isInitComplete){
+    if (isInitComplete) {
         mqtt.publish(MQTT_TOPIC_BASE "availability", "online", true);
         digitalWrite(PIN_STATUS_LED, HIGH);
     }
@@ -274,15 +272,15 @@ void updateReadings() {
     float newTemperature = dht.readTemperature();
     float newHumidity = dht.readHumidity();
     char result[6];
-    if (!nearEqual(temperature, newTemperature, 0.2)) {
+    if (!isnan(newTemperature) && !nearEqual(temperature, newTemperature, 0.2)) {
         temperature = newTemperature;
         dtostrf(temperature, 4, 1, result);
         mqtt.publish(MQTT_TOPIC_BASE "temperature", result, true);
     }
-    if (!nearEqual(humidity, newHumidity, 0.5)) {
+    if (!isnan(newHumidity) && !nearEqual(humidity, newHumidity, 0.5)) {
         humidity = newHumidity;
         dtostrf(humidity, 4, 1, result);
-        mqtt.publish(MQTT_TOPIC_BASE "humidity", result, true);
+        mqtt.publish( "humidity", result, true);
     }
 }
 
@@ -313,9 +311,8 @@ void loop() {
         connectMQTT();
     }
 
-    // loop mqtt
     mqtt.loop();
-    // update temp/humiditiy readings
+
     updateReadings();
 
     // runs once 10s after loop has begun running to post online availability and update states
